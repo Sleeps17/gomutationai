@@ -9,8 +9,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/sleeps/gomutator/internal/mutator"
-	"github.com/sleeps/gomutator/internal/runner"
+	"gitlab.mai.ru/gomutationai/internal/mutator"
+	"gitlab.mai.ru/gomutationai/internal/runner"
 )
 
 // Report содержит все метрики и результаты по каждому мутанту.

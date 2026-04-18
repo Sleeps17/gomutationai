@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/sleeps/gomutator/internal/config"
+	"gitlab.mai.ru/gomutationai/internal/config"
 )
 
 var (

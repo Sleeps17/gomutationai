@@ -1,6 +1,6 @@
 package main
 
-import "github.com/sleeps/gomutator/cmd"
+import "gitlab.mai.ru/gomutationai/cmd"
 
 func main() {
 	cmd.Execute()

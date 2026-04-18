@@ -319,23 +319,21 @@ gomutator/
 ├── cmd/
 │   ├── root.go                    # Корневая команда cobra
 │   └── run.go                     # Команда run
-├── internal/
-│   ├── analyzer/
-│   │   ├── analyzer.go            # AST-анализ, извлечение функций
-│   │   └── testparser.go          # Парсинг тестов, граф вызовов, BFS-расширение
-│   ├── config/
-│   │   └── config.go              # Конфигурация (YAML + defaults)
-│   ├── mutator/
-│   │   ├── mutant.go              # Тип Mutant и статусы
-│   │   └── ai/
-│   │       ├── mutator.go         # LLM-генератор мутантов
-│   │       └── prompt.go          # Промпты и JSON Schema
-│   ├── runner/
-│   │   └── runner.go              # Запуск go test, восстановление файлов
-│   └── reporter/
-│       └── reporter.go            # Метрики и форматирование отчёта
-└── testdata/
-    └── example/                   # Пример пакета для тестирования
+└── internal/
+    ├── analyzer/
+    │   ├── analyzer.go            # AST-анализ, извлечение функций
+    │   └── testparser.go          # Парсинг тестов, граф вызовов, BFS-расширение
+    ├── config/
+    │   └── config.go              # Конфигурация (YAML + defaults)
+    ├── mutator/
+    │   ├── mutant.go              # Тип Mutant и статусы
+    │   └── ai/
+    │       ├── mutator.go         # LLM-генератор мутантов
+    │       └── prompt.go          # Промпты и JSON Schema
+    ├── runner/
+    │   └── runner.go              # Запуск go test, восстановление файлов
+    └── reporter/
+       └── reporter.go            # Метрики и форматирование отчёта
 ```
 
 ## Параллельный изолированный запуск

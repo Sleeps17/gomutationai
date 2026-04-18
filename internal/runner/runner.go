@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sleeps/gomutator/internal/mutator"
+	"gitlab.mai.ru/gomutationai/internal/mutator"
 )
 
 // Result хранит итог выполнения тестов против одного мутанта.

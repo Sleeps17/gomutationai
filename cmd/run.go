@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/sleeps/gomutator/internal/analyzer"
-	"github.com/sleeps/gomutator/internal/mutator"
-	aimutator "github.com/sleeps/gomutator/internal/mutator/ai"
-	"github.com/sleeps/gomutator/internal/reporter"
-	"github.com/sleeps/gomutator/internal/runner"
+	"gitlab.mai.ru/gomutationai/internal/analyzer"
+	"gitlab.mai.ru/gomutationai/internal/mutator"
+	aimutator "gitlab.mai.ru/gomutationai/internal/mutator/ai"
+	"gitlab.mai.ru/gomutationai/internal/reporter"
+	"gitlab.mai.ru/gomutationai/internal/runner"
 )
 
 var runCmd = &cobra.Command{

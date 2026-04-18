@@ -18,8 +18,8 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
-	"github.com/sleeps/gomutator/internal/analyzer"
-	mut "github.com/sleeps/gomutator/internal/mutator"
+	"gitlab.mai.ru/gomutationai/internal/analyzer"
+	mut "gitlab.mai.ru/gomutationai/internal/mutator"
 )
 
 // MutationResponse — структура ответа, которую LLM возвращает в формате JSON.

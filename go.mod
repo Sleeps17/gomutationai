@@ -1,4 +1,4 @@
-module github.com/sleeps/gomutator
+module gitlab.mai.ru/gomutationai
 
 go 1.26.1
 
