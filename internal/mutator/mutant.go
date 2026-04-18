@@ -31,6 +31,9 @@ type Mutant struct {
 	OperatorName string
 	// Человекочитаемое описание внесённого дефекта.
 	Description string
+	// BehavioralImpact — конкретный пример входных данных, на которых мутант меняет поведение.
+	// Генерируется LLM как proof-of-non-equivalence.
+	BehavioralImpact string
 	// Исходный фрагмент кода до мутации.
 	Original string
 	// Изменённый фрагмент кода после мутации.

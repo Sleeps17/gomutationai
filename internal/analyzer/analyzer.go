@@ -25,6 +25,9 @@ type FunctionContext struct {
 	Comment   string
 	StartLine int
 	EndLine   int
+	// TestBody — исходный код теста, который покрывает функцию (если найден).
+	// Передаётся в LLM для более точной генерации мутаций.
+	TestBody string
 }
 
 // FileAnalysis — результат анализа одного Go-файла.
@@ -78,6 +81,19 @@ func AnalyzePackage(dir string) ([]*FileAnalysis, error) {
 		results = append(results, fa)
 	}
 	return results, nil
+}
+
+// AnalyzePackages анализирует все не-тестовые Go-файлы в нескольких директориях.
+func AnalyzePackages(dirs []string) ([]*FileAnalysis, error) {
+	var all []*FileAnalysis
+	for _, dir := range dirs {
+		results, err := AnalyzePackage(dir)
+		if err != nil {
+			return nil, fmt.Errorf("анализ директории %s: %w", dir, err)
+		}
+		all = append(all, results...)
+	}
+	return all, nil
 }
 
 // extractFunctions собирает все функции и методы верхнего уровня вместе

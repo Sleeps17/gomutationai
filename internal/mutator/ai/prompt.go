@@ -24,6 +24,10 @@ var MutationJSONSchema = map[string]any{
 			"type":        "string",
 			"description": "Одно предложение, объясняющее внесённый дефект",
 		},
+		"behavioral_impact": map[string]any{
+			"type":        "string",
+			"description": "Конкретный пример входных данных, на которых мутированная версия вернёт ДРУГОЙ результат, чем оригинал. Например: 'Add(2,3) вернёт 1 вместо 5'. Если такого примера нет — мутация эквивалентна и её нельзя использовать.",
+		},
 		"original_snippet": map[string]any{
 			"type":        "string",
 			"description": "Точная подстрока из исходного кода, которую нужно заменить",
@@ -33,7 +37,7 @@ var MutationJSONSchema = map[string]any{
 			"description": "Текст замены — синтаксически корректный Go-код",
 		},
 	},
-	"required":             []string{"operator_name", "description", "original_snippet", "mutated_snippet"},
+	"required":             []string{"operator_name", "description", "behavioral_impact", "original_snippet", "mutated_snippet"},
 	"additionalProperties": false,
 }
 
@@ -45,7 +49,8 @@ var MutationJSONSchema = map[string]any{
 //
 // Параметр useStructuredOutput указывает, ожидается ли ответ через
 // Structured Output API (тогда JSON-инструкции в промпте не нужны).
-func BuildPrompt(funcBody, fileName string, lineHint int, useStructuredOutput bool) string {
+// testBody — исходный код теста, покрывающего функцию (может быть пустым).
+func BuildPrompt(funcBody, fileName string, lineHint int, useStructuredOutput bool, testBody string) string {
 	formatInstructions := ""
 	if !useStructuredOutput {
 		// При обычном текстовом режиме явно задаём формат ответа в промпте
@@ -55,10 +60,21 @@ func BuildPrompt(funcBody, fileName string, lineHint int, useStructuredOutput bo
 {
   "operator_name": "<название оператора>",
   "description": "<одно предложение об ошибке>",
+  "behavioral_impact": "<конкретный пример входа, где мутант вернёт другой результат>",
   "original_snippet": "<точная подстрока для замены>",
   "mutated_snippet": "<текст замены>"
 }
 `
+	}
+
+	testSection := ""
+	if testBody != "" {
+		testSection = fmt.Sprintf(`
+## Тест, покрывающий функцию
+Используй этот тест для понимания ожидаемого поведения функции.
+Выбирай мутацию, которую этот тест НЕ обнаружит — это даст наиболее ценную информацию о пробелах в тестировании.
+%s
+`, testBody)
 	}
 
 	return fmt.Sprintf(`Ты — эксперт по тестированию программного обеспечения на Go.
@@ -71,9 +87,17 @@ func BuildPrompt(funcBody, fileName string, lineHint int, useStructuredOutput bo
 - Не добавляй импорты и не меняй сигнатуру функции.
 - "original_snippet" — это точная подстрока, присутствующая в коде.
 - "mutated_snippet" — валидный Go-код, замещающий original_snippet.
-%s
+- ЗАПРЕЩЕНО генерировать семантически эквивалентные мутации.
+  Эквивалентная мутация — та, при которой функция возвращает тот же результат
+  на ВСЕХ возможных входных данных. Например, в функции Max(a,b) замена
+  "a > b" на "a >= b" эквивалентна, потому что при a==b оба варианта
+  возвращают одинаковое значение.
+- Перед генерацией мысленно проверь: существует ли хотя бы один конкретный
+  входной набор, на котором мутированная версия вернёт ДРУГОЙ результат?
+  Если нет — выбери другое место для мутации.
+%s%s
 ## Функция для мутации
 // Файл: %s  (область — строка %d)
 %s
-`, formatInstructions, fileName, lineHint, funcBody)
+`, formatInstructions, testSection, fileName, lineHint, funcBody)
 }

@@ -10,19 +10,22 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	aimutator "github.com/sleeps/gomutator/internal/mutator/ai"
-	"github.com/sleeps/gomutator/internal/mutator"
 	"github.com/sleeps/gomutator/internal/analyzer"
+	"github.com/sleeps/gomutator/internal/mutator"
+	aimutator "github.com/sleeps/gomutator/internal/mutator/ai"
 	"github.com/sleeps/gomutator/internal/reporter"
 	"github.com/sleeps/gomutator/internal/runner"
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run [директория-пакета]",
+	Use:   "run [директория ...]",
 	Short: "Запустить мутационное тестирование Go-пакета",
-	Long: `Анализирует Go-пакет, генерирует мутантов с помощью LLM,
-запускает тесты и выводит отчёт с метриками качества тестового набора.`,
-	Args: cobra.MaximumNArgs(1),
+	Long: `Анализирует один или несколько Go-пакетов, генерирует мутантов с помощью LLM,
+запускает тесты и выводит отчёт с метриками качества тестового набора.
+
+Инструмент автоматически находит тестовые файлы (*_test.go) в указанных директориях,
+определяет, какие production-функции покрыты тестами, и мутирует только их.`,
+	Args: cobra.ArbitraryArgs,
 	RunE: runMutation,
 }
 
@@ -41,6 +44,7 @@ func init() {
 	runCmd.Flags().Int("max-mutants", 0, "ограничить число мутантов (0 — без ограничений)")
 	runCmd.Flags().BoolP("verbose", "v", false, "выводить статус каждого мутанта")
 	runCmd.Flags().Bool("dry-run", false, "только сгенерировать мутантов, не запускать тесты")
+	runCmd.Flags().Int("callee-depth", 1, "глубина расширения покрытия по графу вызовов (0 = только напрямую тестируемые функции)")
 
 	// Отчёт
 	runCmd.Flags().StringP("output", "o", "", "сохранить JSON-отчёт в файл")
@@ -49,29 +53,66 @@ func init() {
 func runMutation(cmd *cobra.Command, args []string) error {
 	applyFlags(cmd)
 
-	packageDir := "."
-	if len(args) > 0 {
-		packageDir = args[0]
+	// Один или несколько пакетных директорий; по умолчанию текущая
+	dirs := args
+	if len(dirs) == 0 {
+		dirs = []string{"."}
 	}
 
-	fmt.Printf("gomutator  модель: %s  пакет: %s\n\n", cfg.LLMModel, packageDir)
+	calleeDepth, _ := cmd.Flags().GetInt("callee-depth")
+
+	fmt.Printf("gomutator  модель: %s  пакеты: %s\n\n", cfg.LLMModel, strings.Join(dirs, ", "))
 
 	// ── 1. Анализ исходных файлов ──────────────────────────────────────────
 	fmt.Println("→ Анализ исходных файлов...")
-	analyses, err := analyzer.AnalyzePackage(packageDir)
+	analyses, err := analyzer.AnalyzePackages(dirs)
 	if err != nil {
 		return fmt.Errorf("анализ провалился: %w", err)
 	}
 	if len(analyses) == 0 {
-		return fmt.Errorf("Go-файлы не найдены в %s", packageDir)
+		return fmt.Errorf("Go-файлы не найдены в %s", strings.Join(dirs, ", "))
 	}
 
-	// ── 2. Генерация мутантов через LLM ───────────────────────────────────
+	// ── 2. Определение покрытых тестами функций ────────────────────────────
+	fmt.Println("→ Поиск функций, покрытых тестами...")
+	tested, err := analyzer.ParseTestedFunctions(dirs)
+	if err != nil {
+		return fmt.Errorf("анализ тестов: %w", err)
+	}
+
+	callGraph := analyzer.BuildCallGraph(analyses)
+	coveredSet := analyzer.ExpandWithCallees(tested, callGraph, calleeDepth)
+
+	fmt.Printf("  Покрытых тестами функций: %d (с callees глубиной %d: %d)\n",
+		len(tested), calleeDepth, len(coveredSet))
+
+	// Проставляем TestBody и фильтруем функции по покрытию
+	totalFuncs := 0
+	for _, fa := range analyses {
+		filtered := fa.Functions[:0]
+		for _, fn := range fa.Functions {
+			if !coveredSet[fn.Name] {
+				continue
+			}
+			if tf, ok := tested[fn.Name]; ok {
+				fn.TestBody = tf.TestBody
+			}
+			filtered = append(filtered, fn)
+			totalFuncs++
+		}
+		fa.Functions = filtered
+	}
+	fmt.Printf("  Функций для мутации: %d\n\n", totalFuncs)
+
+	// ── 3. Генерация мутантов через LLM ───────────────────────────────────
 	fmt.Println("→ Генерация мутантов через LLM...")
 	aiMut := aimutator.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.StructuredOutput)
 
 	var mutants []mutator.Mutant
 	for _, fa := range analyses {
+		if len(fa.Functions) == 0 {
+			continue
+		}
 		ms, err := aiMut.Generate(context.Background(), fa)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [ai] %s: %v\n", fa.FilePath, err)
@@ -96,9 +137,15 @@ func runMutation(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// ── 3. Прогон тестов ───────────────────────────────────────────────────
+	if len(mutants) == 0 {
+		fmt.Println("  Нет мутантов для тестирования.")
+		return nil
+	}
+
+	// ── 4. Прогон тестов ───────────────────────────────────────────────────
+	// Запускаем тесты из первой указанной директории (базовая для runner)
 	fmt.Printf("\n→ Запуск тестов против мутантов (workers: %d)...\n", effectiveWorkers(cfg.Workers))
-	r, err := runner.New(packageDir, cfg.Timeout, cfg.Workers, cfg.Verbose)
+	r, err := runner.New(dirs[0], cfg.Timeout, cfg.Workers, cfg.Verbose)
 	if err != nil {
 		return fmt.Errorf("инициализация runner: %w", err)
 	}
@@ -107,7 +154,7 @@ func runMutation(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ошибка runner: %w", err)
 	}
 
-	// ── 4. Формирование отчёта ─────────────────────────────────────────────
+	// ── 5. Формирование отчёта ─────────────────────────────────────────────
 	rep := reporter.Build(results)
 	rep.PrintConsole()
 	rep.PrintOperatorBreakdown()

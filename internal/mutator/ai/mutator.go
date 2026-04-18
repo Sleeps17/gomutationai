@@ -24,10 +24,11 @@ import (
 
 // MutationResponse — структура ответа, которую LLM возвращает в формате JSON.
 type MutationResponse struct {
-	OperatorName    string `json:"operator_name"`
-	Description     string `json:"description"`
-	OriginalSnippet string `json:"original_snippet"`
-	MutatedSnippet  string `json:"mutated_snippet"`
+	OperatorName     string `json:"operator_name"`
+	Description      string `json:"description"`
+	BehavioralImpact string `json:"behavioral_impact"`
+	OriginalSnippet  string `json:"original_snippet"`
+	MutatedSnippet   string `json:"mutated_snippet"`
 }
 
 // Mutator генерирует мутанты с помощью OpenAI-совместимого LLM API.
@@ -99,7 +100,7 @@ func (m *Mutator) generateForFunction(
 	fileSrc []byte,
 	idx int,
 ) (*mut.Mutant, error) {
-	prompt := BuildPrompt(fn.Body, fn.File, fn.StartLine, m.structuredOutput)
+	prompt := BuildPrompt(fn.Body, fn.File, fn.StartLine, m.structuredOutput, fn.TestBody)
 
 	params := openai.ChatCompletionNewParams{
 		Model: m.model,
@@ -151,6 +152,12 @@ func (m *Mutator) generateForFunction(
 		return nil, fmt.Errorf("LLM вернул пустые поля original_snippet или mutated_snippet")
 	}
 
+	// Отклоняем мутант, если LLM не смогла обосновать изменение поведения —
+	// это признак семантически эквивалентной мутации.
+	if resp.BehavioralImpact == "" {
+		return nil, fmt.Errorf("LLM не указала behavioral_impact — мутация предположительно эквивалентна")
+	}
+
 	// Проверяем, что original_snippet действительно присутствует в исходном файле
 	if !strings.Contains(string(fileSrc), resp.OriginalSnippet) {
 		return nil, fmt.Errorf("original_snippet не найден в файле: %q", resp.OriginalSnippet)
@@ -168,15 +175,16 @@ func (m *Mutator) generateForFunction(
 	}
 
 	return &mut.Mutant{
-		ID:           fmt.Sprintf("ai_%s_%d", fn.Name, idx),
-		File:         fn.File,
-		Line:         lineNum,
-		OperatorName: resp.OperatorName,
-		Description:  resp.Description,
-		Original:     resp.OriginalSnippet,
-		Mutated:      resp.MutatedSnippet,
-		MutatedSrc:   mutatedSrc,
-		Status:       mut.StatusPending,
+		ID:               fmt.Sprintf("ai_%s_%d", fn.Name, idx),
+		File:             fn.File,
+		Line:             lineNum,
+		OperatorName:     resp.OperatorName,
+		Description:      resp.Description,
+		BehavioralImpact: resp.BehavioralImpact,
+		Original:         resp.OriginalSnippet,
+		Mutated:          resp.MutatedSnippet,
+		MutatedSrc:       mutatedSrc,
+		Status:           mut.StatusPending,
 	}, nil
 }
 
