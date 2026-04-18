@@ -31,6 +31,10 @@ type Config struct {
 	// OutputFile — путь для сохранения JSON-отчёта.
 	OutputFile string `yaml:"output"`
 
+	// Workers — число параллельных тестовых прогонов.
+	// 0 означает автоматический выбор по числу логических ядер CPU.
+	Workers int `yaml:"workers"`
+
 	// MaxMutants ограничивает число мутантов (0 = без ограничений).
 	MaxMutants int `yaml:"max_mutants"`
 
