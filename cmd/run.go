@@ -61,7 +61,7 @@ func runMutation(cmd *cobra.Command, args []string) error {
 
 	calleeDepth, _ := cmd.Flags().GetInt("callee-depth")
 
-	fmt.Printf("gomutator  модель: %s  пакеты: %s\n\n", cfg.LLMModel, strings.Join(dirs, ", "))
+	fmt.Printf("gomutationai  модель: %s  пакеты: %s\n\n", cfg.LLMModel, strings.Join(dirs, ", "))
 
 	// ── 1. Анализ исходных файлов ──────────────────────────────────────────
 	fmt.Println("→ Анализ исходных файлов...")

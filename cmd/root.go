@@ -1,4 +1,4 @@
-// Пакет cmd реализует CLI-интерфейс инструмента gomutator с помощью cobra.
+// Пакет cmd реализует CLI-интерфейс инструмента gomutationai с помощью cobra.
 package cmd
 
 import (
@@ -15,9 +15,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gomutator",
+	Use:   "gomutationai",
 	Short: "Инструмент мутационного тестирования Go с поддержкой AI",
-	Long: `gomutator — гибридный инструмент мутационного тестирования для языка Go.
+	Long: `gomutationai — гибридный инструмент мутационного тестирования для языка Go.
 Сочетает классические AST-операторы мутации с генерацией мутантов через
 OpenAI-совместимый LLM API для получения семантически осмысленных дефектов.
 
@@ -37,7 +37,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", ".gomutator.yaml", "путь к файлу конфигурации")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", ".gomutationai.yaml", "путь к файлу конфигурации")
 }
 
 // initConfig загружает конфигурацию из файла при старте любой команды.

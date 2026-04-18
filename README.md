@@ -1,9 +1,9 @@
-# gomutator
+# gomutationai
 
 Инструмент мутационного тестирования для языка Go на основе больших языковых моделей (LLM).
 
 В отличие от классических мутаторов (go-mutesting, Gremlins), которые заменяют токены по заранее
-заданным правилам, **gomutator** генерирует мутанты с помощью LLM — модель анализирует логику
+заданным правилам, **gomutationai** генерирует мутанты с помощью LLM — модель анализирует логику
 функции и предлагает семантически осмысленное изменение, имитирующее реальную ошибку программиста.
 
 ## Принцип работы
@@ -67,7 +67,7 @@ go run . run [флаги] [директория ...]
 ```bash
 export OPENAI_API_KEY=sk-...
 
-gomutator run \
+gomutationai run \
   --model gpt-4o-mini \
   --output report.json \
   ./path/to/your/package
@@ -76,7 +76,7 @@ gomutator run \
 ### Несколько пакетов
 
 ```bash
-gomutator run \
+gomutationai run \
   --model gpt-4o-mini \
   ./pkg/orders ./pkg/users ./pkg/auth
 ```
@@ -87,7 +87,7 @@ gomutator run \
 # Запустить модель в Ollama
 ollama run llama3
 
-gomutator run \
+gomutationai run \
   --llm-url http://localhost:11434/v1 \
   --model llama3 \
   --structured-output=false \
@@ -97,7 +97,7 @@ gomutator run \
 ### LM Studio
 
 ```bash
-gomutator run \
+gomutationai run \
   --llm-url http://localhost:1234/v1 \
   --model local-model \
   --structured-output=false \
@@ -107,7 +107,7 @@ gomutator run \
 ### Dry-run (только генерация, без запуска тестов)
 
 ```bash
-gomutator run --dry-run ./mypackage
+gomutationai run --dry-run ./mypackage
 ```
 
 ## Принцип выбора функций для мутации
@@ -143,7 +143,7 @@ gomutator run --dry-run ./mypackage
 ### Команда `run`
 
 ```
-gomutator run [директория ...] [флаги]
+gomutationai run [директория ...] [флаги]
 ```
 
 Можно передать одну или несколько директорий. Если директория не указана, используется текущая (`.`).
@@ -183,15 +183,15 @@ gomutator run [директория ...] [флаги]
 
 | Флаг       | По умолчанию       | Описание |
 |------------|--------------------|----------|
-| `--config` | `.gomutator.yaml`  | Путь к файлу конфигурации |
+| `--config` | `.gomutationai.yaml`  | Путь к файлу конфигурации |
 
 ## Файл конфигурации
 
-Вместо флагов можно использовать файл `.gomutator.yaml` в директории запуска.
+Вместо флагов можно использовать файл `.gomutationai.yaml` в директории запуска.
 Флаги командной строки имеют приоритет над настройками файла.
 
 ```yaml
-# .gomutator.yaml
+# .gomutationai.yaml
 
 # URL OpenAI-совместимого API
 llm_base_url: "https://api.openai.com/v1"
@@ -261,7 +261,7 @@ unique_operator_names / total
 ## Пример вывода
 
 ```
-gomutator  модель: gpt-4o-mini  пакеты: ./mypackage
+gomutationai  модель: gpt-4o-mini  пакеты: ./mypackage
 
 → Анализ исходных файлов...
 → Поиск функций, покрытых тестами...
@@ -314,7 +314,7 @@ gomutator  модель: gpt-4o-mini  пакеты: ./mypackage
 ## Структура проекта
 
 ```
-gomutator/
+gomutationai/
 ├── main.go                        # Точка входа
 ├── cmd/
 │   ├── root.go                    # Корневая команда cobra
@@ -341,14 +341,14 @@ gomutator/
 Каждый мутант тестируется в **отдельной временной копии всего Go-модуля**:
 
 ```
-модуль/          →  /tmp/gomutator-abc123/   ← копия 1 (мутант #1)
+модуль/          →  /tmp/gomutationai-abc123/   ← копия 1 (мутант #1)
   go.mod              go.mod
   go.sum              go.sum
   pkg/                pkg/
     math.go  ←─────── math.go  (мутирован)
 
-                /tmp/gomutator-def456/   ← копия 2 (мутант #2)
-                /tmp/gomutator-ghi789/   ← копия 3 (мутант #3)
+                /tmp/gomutationai-def456/   ← копия 2 (мутант #2)
+                /tmp/gomutationai-ghi789/   ← копия 3 (мутант #3)
                 ...
 ```
 

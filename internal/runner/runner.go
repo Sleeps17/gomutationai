@@ -142,7 +142,7 @@ func (r *Runner) runOneIsolated(ctx context.Context, m *mutator.Mutant) (Result,
 	}
 
 	// Шаг 2: создаём временную директорию и копируем туда весь модуль.
-	tmpDir, err := os.MkdirTemp("", "gomutator-*")
+	tmpDir, err := os.MkdirTemp("", "gomutationai-*")
 	if err != nil {
 		return Result{}, fmt.Errorf("создание tmpdir: %w", err)
 	}
