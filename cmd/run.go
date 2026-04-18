@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func init() {
 
 	// Управление прогоном
 	runCmd.Flags().DurationP("timeout", "t", 0, "таймаут на один тестовый прогон, например 30s")
+	runCmd.Flags().IntP("workers", "w", 0, "число параллельных тестовых прогонов (0 = NumCPU)")
 	runCmd.Flags().Int("max-mutants", 0, "ограничить число мутантов (0 — без ограничений)")
 	runCmd.Flags().BoolP("verbose", "v", false, "выводить статус каждого мутанта")
 	runCmd.Flags().Bool("dry-run", false, "только сгенерировать мутантов, не запускать тесты")
@@ -95,8 +97,11 @@ func runMutation(cmd *cobra.Command, args []string) error {
 	}
 
 	// ── 3. Прогон тестов ───────────────────────────────────────────────────
-	fmt.Println("\n→ Запуск тестов против мутантов...")
-	r := runner.New(packageDir, cfg.Timeout, cfg.Verbose)
+	fmt.Printf("\n→ Запуск тестов против мутантов (workers: %d)...\n", effectiveWorkers(cfg.Workers))
+	r, err := runner.New(packageDir, cfg.Timeout, cfg.Workers, cfg.Verbose)
+	if err != nil {
+		return fmt.Errorf("инициализация runner: %w", err)
+	}
 	results, err := r.Run(context.Background(), mutants)
 	if err != nil {
 		return fmt.Errorf("ошибка runner: %w", err)
@@ -143,6 +148,9 @@ func applyFlags(cmd *cobra.Command) {
 	if v, err := cmd.Flags().GetDuration("timeout"); err == nil && v > 0 {
 		cfg.Timeout = v
 	}
+	if v, err := cmd.Flags().GetInt("workers"); err == nil && v > 0 {
+		cfg.Workers = v
+	}
 	if v, err := cmd.Flags().GetInt("max-mutants"); err == nil && v > 0 {
 		cfg.MaxMutants = v
 	}
@@ -163,6 +171,14 @@ func printMutantList(mutants []mutator.Mutant) {
 			m.ID, m.OperatorName, m.Line,
 			truncate(m.Description, 45))
 	}
+}
+
+// effectiveWorkers возвращает фактическое число воркеров с учётом дефолта.
+func effectiveWorkers(w int) int {
+	if w <= 0 {
+		return runtime.NumCPU()
+	}
+	return w
 }
 
 func truncate(s string, n int) string {
