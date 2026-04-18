@@ -12,16 +12,23 @@ func TestAdd(t *testing.T) {
 }
 
 func TestDivide(t *testing.T) {
-	got, err := Divide(10, 2)
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		a       float64
+		b       float64
+		want    float64
+		wantErr bool
+	}{
+		{1, 0, 0, true}, {1, 1, 1, false}, {1, -1, -1, false},
 	}
-	if got != 5 {
-		t.Errorf("Divide(10,2) = %f, want 5", got)
-	}
-	_, err = Divide(1, 0)
-	if err == nil {
-		t.Error("expected error for division by zero")
+	for _, c := range cases {
+		got, err := Divide(c.a, c.b)
+		if (err != nil) != c.wantErr {
+			t.Errorf("Divide(%f, %f) = %v, want error: %v", c.a, c.b, err, c.wantErr)
+		}
+
+		if got != c.want {
+			t.Errorf("Divide(%f, %f) = %v, want %v", c.a, c.b, got, c.want)
+		}
 	}
 }
 
@@ -55,4 +62,8 @@ func TestFactorial(t *testing.T) {
 			t.Errorf("Factorial(%d) = %d, want %d", c.n, got, c.want)
 		}
 	}
+}
+
+func TestContains(t *testing.T) {
+
 }

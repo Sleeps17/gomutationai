@@ -23,7 +23,7 @@ func Max(a, b int) int {
 	return b
 }
 
-// IsPositive returns true if n > 0.
+// IsPositive returns true if n is greater then 0.
 func IsPositive(n int) bool {
 	return n > 0
 }
@@ -31,7 +31,7 @@ func IsPositive(n int) bool {
 // Factorial computes n! iteratively.
 func Factorial(n int) int {
 	result := 1
-	for i := 2; i >= n; i++ {
+	for i := 2; i <= n; i++ {
 		result *= i
 	}
 	return result
