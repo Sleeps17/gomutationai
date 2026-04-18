@@ -1,0 +1,189 @@
+// Пакет ai реализует генератор мутантов на основе LLM через OpenAI-совместимый API.
+// Поддерживает любой сервис: OpenAI, Azure OpenAI, Ollama, LM Studio и другие.
+//
+// Принцип работы:
+//  1. Для каждой функции формируется Chain-of-Thought промпт.
+//  2. Запрос отправляется в LLM (опционально — со Structured Output).
+//  3. Ответ парсится в MutationResponse и преобразуется в мутант.
+package ai
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/shared"
+	"github.com/sleeps/gomutator/internal/analyzer"
+	mut "github.com/sleeps/gomutator/internal/mutator"
+)
+
+// MutationResponse — структура ответа, которую LLM возвращает в формате JSON.
+type MutationResponse struct {
+	OperatorName    string `json:"operator_name"`
+	Description     string `json:"description"`
+	OriginalSnippet string `json:"original_snippet"`
+	MutatedSnippet  string `json:"mutated_snippet"`
+}
+
+// Mutator генерирует мутанты с помощью OpenAI-совместимого LLM API.
+type Mutator struct {
+	client           openai.Client
+	model            string
+	structuredOutput bool
+}
+
+// New создаёт новый AI-мутатор.
+//
+//   - baseURL — базовый URL API, например "https://api.openai.com/v1"
+//     или "http://localhost:11434/v1" для Ollama.
+//   - apiKey — токен доступа; допустима пустая строка для локальных моделей.
+//   - model — идентификатор модели, например "gpt-4o-mini" или "llama3".
+//   - structuredOutput — включить ли режим Structured Output (JSON Schema).
+func New(baseURL, apiKey, model string, structuredOutput bool) *Mutator {
+	opts := []option.RequestOption{}
+
+	if baseURL != "" {
+		opts = append(opts, option.WithBaseURL(baseURL))
+	}
+
+	// Если ключ не передан, SDK автоматически читает OPENAI_API_KEY из окружения.
+	// Для локальных моделей без авторизации передаём заглушку.
+	if apiKey != "" {
+		opts = append(opts, option.WithAPIKey(apiKey))
+	} else if os.Getenv("OPENAI_API_KEY") == "" {
+		// Некоторые OpenAI-совместимые серверы требуют непустой ключ
+		opts = append(opts, option.WithAPIKey("no-key"))
+	}
+
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
+	return &Mutator{
+		client:           openai.NewClient(opts...),
+		model:            model,
+		structuredOutput: structuredOutput,
+	}
+}
+
+// Generate запрашивает у LLM по одной мутации на каждую функцию в файле.
+func (m *Mutator) Generate(ctx context.Context, fa *analyzer.FileAnalysis) ([]mut.Mutant, error) {
+	src, err := os.ReadFile(fa.FilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var all []mut.Mutant
+	for i, fn := range fa.Functions {
+		m2, err := m.generateForFunction(ctx, fn, src, i)
+		if err != nil {
+			// Ошибка одной функции не должна прерывать весь анализ
+			fmt.Printf("[ai] предупреждение: функция %s: %v\n", fn.Name, err)
+			continue
+		}
+		if m2 != nil {
+			all = append(all, *m2)
+		}
+	}
+	return all, nil
+}
+
+func (m *Mutator) generateForFunction(
+	ctx context.Context,
+	fn analyzer.FunctionContext,
+	fileSrc []byte,
+	idx int,
+) (*mut.Mutant, error) {
+	prompt := BuildPrompt(fn.Body, fn.File, fn.StartLine, m.structuredOutput)
+
+	params := openai.ChatCompletionNewParams{
+		Model: m.model,
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(SystemPrompt),
+			openai.UserMessage(prompt),
+		},
+		MaxTokens: param.NewOpt[int64](1024),
+	}
+
+	// Подключаем Structured Output, если он включён в конфигурации.
+	// Это гарантирует, что модель вернёт строго соответствующий JSON Schema ответ.
+	if m.structuredOutput {
+		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "mutation_response",
+					Description: param.NewOpt("Описание мутации для Go-кода"),
+					Schema:      MutationJSONSchema,
+					Strict:      param.NewOpt(true),
+				},
+			},
+		}
+	}
+
+	completion, err := m.client.Chat.Completions.New(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("LLM API: %w", err)
+	}
+
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("LLM вернул пустой список вариантов")
+	}
+
+	rawJSON := strings.TrimSpace(completion.Choices[0].Message.Content)
+	if rawJSON == "" {
+		return nil, fmt.Errorf("LLM вернул пустой ответ")
+	}
+
+	// На случай если модель всё равно обернула JSON в markdown-блок
+	rawJSON = stripMarkdownFences(rawJSON)
+
+	var resp MutationResponse
+	if err := json.Unmarshal([]byte(rawJSON), &resp); err != nil {
+		return nil, fmt.Errorf("разбор JSON-ответа: %w\nсырой ответ: %s", err, rawJSON)
+	}
+
+	if resp.OriginalSnippet == "" || resp.MutatedSnippet == "" {
+		return nil, fmt.Errorf("LLM вернул пустые поля original_snippet или mutated_snippet")
+	}
+
+	// Проверяем, что original_snippet действительно присутствует в исходном файле
+	if !strings.Contains(string(fileSrc), resp.OriginalSnippet) {
+		return nil, fmt.Errorf("original_snippet не найден в файле: %q", resp.OriginalSnippet)
+	}
+
+	mutatedSrc := []byte(strings.Replace(string(fileSrc), resp.OriginalSnippet, resp.MutatedSnippet, 1))
+
+	// Определяем номер строки по первому вхождению original_snippet
+	lineNum := fn.StartLine
+	for i, line := range strings.Split(string(fileSrc), "\n") {
+		if strings.Contains(line, resp.OriginalSnippet) {
+			lineNum = i + 1
+			break
+		}
+	}
+
+	return &mut.Mutant{
+		ID:           fmt.Sprintf("ai_%s_%d", fn.Name, idx),
+		File:         fn.File,
+		Line:         lineNum,
+		OperatorName: resp.OperatorName,
+		Description:  resp.Description,
+		Original:     resp.OriginalSnippet,
+		Mutated:      resp.MutatedSnippet,
+		MutatedSrc:   mutatedSrc,
+		Status:       mut.StatusPending,
+	}, nil
+}
+
+// stripMarkdownFences удаляет обёртку ```json ... ``` если модель её добавила.
+func stripMarkdownFences(s string) string {
+	s = strings.TrimPrefix(s, "```json")
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSuffix(s, "```")
+	return strings.TrimSpace(s)
+}
