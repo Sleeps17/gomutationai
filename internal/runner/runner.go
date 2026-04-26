@@ -1,14 +1,15 @@
-// Пакет runner применяет мутанты в изолированных временных копиях модуля,
+// Пакет runner применяет мутанты в пуле изолированных копий модуля,
 // запускает go test параллельно и определяет статус каждого мутанта.
 //
-// Схема работы для каждого мутанта:
-//  1. Синтаксическая проверка через go/parser (без I/O).
-//  2. Копирование всего Go-модуля во временную директорию.
-//  3. Запись мутированного файла в копию.
-//  4. Запуск go test в изолированной копии.
-//  5. Удаление временной директории.
+// Схема работы:
+//  1. При старте создаётся ровно Workers копий модуля в tmpdir — по одной на воркер.
+//  2. Каждый мутант:
+//     a. Синтаксическая проверка через go/parser (без I/O).
+//     b. Воркер берёт свободную копию из пула, вносит мутацию, запускает go test.
+//     c. После теста восстанавливает файл из оригинала и возвращает копию в пул.
+//  3. По завершении все копии удаляются.
 //
-// Шаги 2–5 выполняются параллельно в пуле Workers горутин.
+// Это сокращает дисковые операции с O(мутанты × модуль) до O(воркеры × модуль).
 // Оригинальные файлы никогда не изменяются.
 package runner
 
@@ -84,13 +85,20 @@ func New(packageDir string, timeout time.Duration, workers int, verbose bool) (*
 // Run запускает все мутанты параллельно и возвращает результаты.
 // Порядок результатов соответствует порядку входных мутантов.
 func (r *Runner) Run(ctx context.Context, mutants []mutator.Mutant) ([]Result, error) {
+	if len(mutants) == 0 {
+		return nil, nil
+	}
+
+	// Создаём пул рабочих директорий — по одной копии модуля на воркер.
+	pool, cleanup, err := r.setupWorkerPool()
+	if err != nil {
+		return nil, fmt.Errorf("создание пула директорий: %w", err)
+	}
+	defer cleanup()
+
 	results := make([]Result, len(mutants))
-
-	// Семафор для ограничения числа параллельных горутин
-	sem := make(chan struct{}, r.Workers)
-
 	var wg sync.WaitGroup
-	var mu sync.Mutex // защищает firstErr и Verbose-вывод
+	var mu sync.Mutex
 	var firstErr error
 
 	for i := range mutants {
@@ -98,15 +106,11 @@ func (r *Runner) Run(ctx context.Context, mutants []mutator.Mutant) ([]Result, e
 		go func(idx int) {
 			defer wg.Done()
 
-			// Захватываем слот в семафоре
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
 			if ctx.Err() != nil {
 				return
 			}
 
-			res, err := r.runOneIsolated(ctx, &mutants[idx])
+			res, err := r.runOne(ctx, &mutants[idx], pool)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -131,28 +135,58 @@ func (r *Runner) Run(ctx context.Context, mutants []mutator.Mutant) ([]Result, e
 	return results, firstErr
 }
 
-// runOneIsolated выполняет полный цикл для одного мутанта в изолированной копии модуля.
-func (r *Runner) runOneIsolated(ctx context.Context, m *mutator.Mutant) (Result, error) {
+// setupWorkerPool создаёт Workers копий модуля и возвращает канал с путями к ним.
+// Второе возвращаемое значение — функция очистки, удаляющая все копии.
+func (r *Runner) setupWorkerPool() (chan string, func(), error) {
+	dirs := make([]string, 0, r.Workers)
+
+	pool := make(chan string, r.Workers)
+
+	for i := 0; i < r.Workers; i++ {
+		tmpDir, err := os.MkdirTemp("", "gomutationai-*")
+		if err != nil {
+			// Убираем уже созданные директории перед выходом с ошибкой
+			for _, d := range dirs {
+				os.RemoveAll(d)
+			}
+			return nil, nil, fmt.Errorf("создание рабочей директории: %w", err)
+		}
+
+		if err := copyDir(r.ModuleRoot, tmpDir); err != nil {
+			os.RemoveAll(tmpDir)
+			for _, d := range dirs {
+				os.RemoveAll(d)
+			}
+			return nil, nil, fmt.Errorf("копирование модуля в рабочую директорию: %w", err)
+		}
+
+		dirs = append(dirs, tmpDir)
+		pool <- tmpDir
+	}
+
+	cleanup := func() {
+		for _, d := range dirs {
+			os.RemoveAll(d)
+		}
+	}
+
+	return pool, cleanup, nil
+}
+
+// runOne выполняет полный цикл для одного мутанта, используя директорию из пула.
+func (r *Runner) runOne(ctx context.Context, m *mutator.Mutant, pool chan string) (Result, error) {
 	start := time.Now()
 
-	// Шаг 1: синтаксическая проверка — без создания файлов, быстро.
+	// Быстрая синтаксическая проверка до захвата рабочей директории.
 	if status, errMsg := verifySyntax(m); status != "" {
 		m.Status = status
 		return Result{Mutant: *m, Duration: time.Since(start), Output: errMsg}, nil
 	}
 
-	// Шаг 2: создаём временную директорию и копируем туда весь модуль.
-	tmpDir, err := os.MkdirTemp("", "gomutationai-*")
-	if err != nil {
-		return Result{}, fmt.Errorf("создание tmpdir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir) // гарантируем очистку
+	// Захватываем свободную рабочую директорию из пула.
+	workerDir := <-pool
+	defer func() { pool <- workerDir }() // возвращаем в пул после завершения
 
-	if err := copyDir(r.ModuleRoot, tmpDir); err != nil {
-		return Result{}, fmt.Errorf("копирование модуля: %w", err)
-	}
-
-	// Шаг 3: записываем мутированный файл в копию модуля.
 	absFile, err := filepath.Abs(m.File)
 	if err != nil {
 		return Result{}, fmt.Errorf("абсолютный путь файла: %w", err)
@@ -161,20 +195,28 @@ func (r *Runner) runOneIsolated(ctx context.Context, m *mutator.Mutant) (Result,
 	if err != nil {
 		return Result{}, fmt.Errorf("относительный путь файла: %w", err)
 	}
-	tmpFile := filepath.Join(tmpDir, relFile)
+	workerFile := filepath.Join(workerDir, relFile)
 
-	if err := os.WriteFile(tmpFile, m.MutatedSrc, 0644); err != nil {
+	// Записываем мутированный файл в рабочую копию.
+	if err := os.WriteFile(workerFile, m.MutatedSrc, 0644); err != nil {
 		return Result{}, fmt.Errorf("запись мутанта: %w", err)
 	}
 
-	// Шаг 4: вычисляем путь пакета относительно tmpDir и запускаем тесты.
+	// После теста восстанавливаем оригинальный файл из ModuleRoot.
+	// ModuleRoot никогда не изменяется — это источник истины.
+	origFile := filepath.Join(r.ModuleRoot, relFile)
+	defer func() {
+		if orig, err := os.ReadFile(origFile); err == nil {
+			os.WriteFile(workerFile, orig, 0644) //nolint:errcheck
+		}
+	}()
+
 	relPkg, err := filepath.Rel(r.ModuleRoot, r.PackageDir)
 	if err != nil {
 		return Result{}, fmt.Errorf("относительный путь пакета: %w", err)
 	}
-	pkgArg := "./" + relPkg
 
-	output, killed, timedOut := r.execTest(ctx, tmpDir, pkgArg)
+	output, killed, timedOut := r.execTest(ctx, workerDir, "./"+relPkg)
 
 	switch {
 	case timedOut:
@@ -251,16 +293,14 @@ func findModuleRoot(dir string) (string, error) {
 	}
 	gomod := strings.TrimSpace(string(out))
 	if gomod == "" || gomod == os.DevNull {
-		// Модуль не найден — используем саму директорию
 		return dir, nil
 	}
 	return filepath.Dir(gomod), nil
 }
 
 // copyDir рекурсивно копирует дерево директорий src в dst.
-// Пропускает директории .git и прочие служебные директории.
+// Пропускает служебные директории (.git, .idea, .vscode, node_modules).
 func copyDir(src, dst string) error {
-	// Директории, которые не нужно копировать
 	skipDirs := map[string]bool{
 		".git":         true,
 		".idea":        true,
@@ -272,8 +312,6 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-
-		// Пропускаем служебные директории
 		if d.IsDir() && skipDirs[d.Name()] {
 			return fs.SkipDir
 		}
@@ -287,7 +325,6 @@ func copyDir(src, dst string) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0755)
 		}
-
 		return copyFile(path, target)
 	})
 }

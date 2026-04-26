@@ -398,6 +398,81 @@ func TestExecTest_BuildFailed(t *testing.T) {
 	_ = output
 }
 
+// ── setupWorkerPool ───────────────────────────────────────────────────────────
+
+func TestSetupWorkerPool_CreatesCorrectCount(t *testing.T) {
+	dir := testdataDir(t)
+	r, err := New(dir, 10*time.Second, 3, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pool, cleanup, err := r.setupWorkerPool()
+	if err != nil {
+		t.Fatalf("setupWorkerPool: %v", err)
+	}
+	defer cleanup()
+
+	if cap(pool) != 3 {
+		t.Errorf("cap(pool) = %d, want 3", cap(pool))
+	}
+	if len(pool) != 3 {
+		t.Errorf("len(pool) = %d, want 3 (все директории должны быть в пуле)", len(pool))
+	}
+}
+
+func TestSetupWorkerPool_DirsContainGoMod(t *testing.T) {
+	dir := testdataDir(t)
+	r, err := New(dir, 10*time.Second, 2, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pool, cleanup, err := r.setupWorkerPool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	for i := 0; i < 2; i++ {
+		workerDir := <-pool
+		if _, err := os.Stat(filepath.Join(workerDir, "go.mod")); err != nil {
+			t.Errorf("воркер-директория %s не содержит go.mod", workerDir)
+		}
+		pool <- workerDir
+	}
+}
+
+func TestSetupWorkerPool_CleanupRemovesDirs(t *testing.T) {
+	dir := testdataDir(t)
+	r, err := New(dir, 10*time.Second, 2, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pool, cleanup, err := r.setupWorkerPool()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Сохраняем пути до cleanup
+	paths := make([]string, 2)
+	for i := range paths {
+		paths[i] = <-pool
+	}
+	for _, p := range paths {
+		pool <- p
+	}
+
+	cleanup()
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("директория %s должна быть удалена после cleanup", p)
+		}
+	}
+}
+
 // ── Run (интеграционные) ──────────────────────────────────────────────────────
 
 func TestRun_CompileErrorMutant(t *testing.T) {
