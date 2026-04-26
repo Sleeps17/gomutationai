@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,6 +38,7 @@ func init() {
 	runCmd.Flags().String("llm-key", "", "токен доступа к LLM (или переменная OPENAI_API_KEY)")
 	runCmd.Flags().String("model", "", "идентификатор модели, например gpt-4o-mini или llama3")
 	runCmd.Flags().Bool("structured-output", true, "использовать Structured Output / JSON Schema (если модель поддерживает)")
+	runCmd.Flags().Int("llm-workers", 0, "число параллельных запросов к LLM (0 = 4)")
 
 	// Управление прогоном
 	runCmd.Flags().DurationP("timeout", "t", 0, "таймаут на один тестовый прогон, например 30s")
@@ -104,22 +106,45 @@ func runMutation(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("  Функций для мутации: %d\n\n", totalFuncs)
 
-	// ── 3. Генерация мутантов через LLM ───────────────────────────────────
-	fmt.Println("→ Генерация мутантов через LLM...")
-	aiMut := aimutator.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.StructuredOutput)
+	// ── 3. Генерация мутантов через LLM (параллельно по файлам) ──────────
+	fmt.Printf("→ Генерация мутантов через LLM (llm-workers: %d)...\n", effectiveLLMWorkers(cfg.LLMWorkers))
+	aiMut := aimutator.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.StructuredOutput, cfg.LLMWorkers)
 
-	var mutants []mutator.Mutant
-	for _, fa := range analyses {
+	type fileResult struct {
+		path    string
+		mutants []mutator.Mutant
+		err     error
+	}
+	fileResults := make([]fileResult, len(analyses))
+
+	var wg sync.WaitGroup
+	var printMu sync.Mutex
+	for i, fa := range analyses {
 		if len(fa.Functions) == 0 {
 			continue
 		}
-		ms, err := aiMut.Generate(context.Background(), fa)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  [ai] %s: %v\n", fa.FilePath, err)
-			continue
+		wg.Add(1)
+		go func(idx int, fa *analyzer.FileAnalysis) {
+			defer wg.Done()
+			ms, err := aiMut.Generate(context.Background(), fa)
+			fileResults[idx] = fileResult{path: fa.FilePath, mutants: ms, err: err}
+
+			printMu.Lock()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  [ai] %s: %v\n", fa.FilePath, err)
+			} else {
+				fmt.Printf("  %s → %d мутантов\n", fa.FilePath, len(ms))
+			}
+			printMu.Unlock()
+		}(i, fa)
+	}
+	wg.Wait()
+
+	var mutants []mutator.Mutant
+	for _, fr := range fileResults {
+		if fr.err == nil {
+			mutants = append(mutants, fr.mutants...)
 		}
-		mutants = append(mutants, ms...)
-		fmt.Printf("  %s → %d мутантов\n", fa.FilePath, len(ms))
 	}
 
 	// Ограничение числа мутантов
@@ -198,6 +223,9 @@ func applyFlags(cmd *cobra.Command) {
 	if v, err := cmd.Flags().GetInt("workers"); err == nil && v > 0 {
 		cfg.Workers = v
 	}
+	if v, err := cmd.Flags().GetInt("llm-workers"); err == nil && v > 0 {
+		cfg.LLMWorkers = v
+	}
 	if v, err := cmd.Flags().GetInt("max-mutants"); err == nil && v > 0 {
 		cfg.MaxMutants = v
 	}
@@ -220,10 +248,18 @@ func printMutantList(mutants []mutator.Mutant) {
 	}
 }
 
-// effectiveWorkers возвращает фактическое число воркеров с учётом дефолта.
+// effectiveWorkers возвращает фактическое число воркеров тестов с учётом дефолта.
 func effectiveWorkers(w int) int {
 	if w <= 0 {
 		return runtime.NumCPU()
+	}
+	return w
+}
+
+// effectiveLLMWorkers возвращает фактическое число параллельных LLM-запросов.
+func effectiveLLMWorkers(w int) int {
+	if w <= 0 {
+		return 4
 	}
 	return w
 }

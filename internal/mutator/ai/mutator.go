@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -36,6 +37,8 @@ type Mutator struct {
 	client           openai.Client
 	model            string
 	structuredOutput bool
+	// sem ограничивает число одновременных запросов к LLM.
+	sem chan struct{}
 }
 
 // New создаёт новый AI-мутатор.
@@ -45,7 +48,8 @@ type Mutator struct {
 //   - apiKey — токен доступа; допустима пустая строка для локальных моделей.
 //   - model — идентификатор модели, например "gpt-4o-mini" или "llama3".
 //   - structuredOutput — включить ли режим Structured Output (JSON Schema).
-func New(baseURL, apiKey, model string, structuredOutput bool) *Mutator {
+//   - workers — максимальное число одновременных запросов к LLM (0 = 4).
+func New(baseURL, apiKey, model string, structuredOutput bool, workers int) *Mutator {
 	opts := []option.RequestOption{}
 
 	if baseURL != "" {
@@ -64,31 +68,61 @@ func New(baseURL, apiKey, model string, structuredOutput bool) *Mutator {
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
+	if workers <= 0 {
+		workers = 4
+	}
 
 	return &Mutator{
 		client:           openai.NewClient(opts...),
 		model:            model,
 		structuredOutput: structuredOutput,
+		sem:              make(chan struct{}, workers),
 	}
 }
 
 // Generate запрашивает у LLM по одной мутации на каждую функцию в файле.
+// Запросы выполняются параллельно с ограничением через семафор Mutator.sem.
 func (m *Mutator) Generate(ctx context.Context, fa *analyzer.FileAnalysis) ([]mut.Mutant, error) {
 	src, err := os.ReadFile(fa.FilePath)
 	if err != nil {
 		return nil, err
 	}
 
-	var all []mut.Mutant
+	type entry struct {
+		mutant *mut.Mutant
+		err    error
+	}
+
+	// Предвыделяем слайс чтобы сохранить порядок функций
+	entries := make([]entry, len(fa.Functions))
+
+	var wg sync.WaitGroup
 	for i, fn := range fa.Functions {
-		m2, err := m.generateForFunction(ctx, fn, src, i)
-		if err != nil {
-			// Ошибка одной функции не должна прерывать весь анализ
-			fmt.Printf("[ai] предупреждение: функция %s: %v\n", fn.Name, err)
+		wg.Add(1)
+		go func(idx int, fn analyzer.FunctionContext) {
+			defer wg.Done()
+
+			// Захватываем слот в семафоре — ограничение на параллельные LLM-запросы
+			m.sem <- struct{}{}
+			defer func() { <-m.sem }()
+
+			if ctx.Err() != nil {
+				return
+			}
+			m2, err := m.generateForFunction(ctx, fn, src, idx)
+			entries[idx] = entry{mutant: m2, err: err}
+		}(i, fn)
+	}
+	wg.Wait()
+
+	var all []mut.Mutant
+	for i, e := range entries {
+		if e.err != nil {
+			fmt.Printf("[ai] предупреждение: функция %s: %v\n", fa.Functions[i].Name, e.err)
 			continue
 		}
-		if m2 != nil {
-			all = append(all, *m2)
+		if e.mutant != nil {
+			all = append(all, *e.mutant)
 		}
 	}
 	return all, nil

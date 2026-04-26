@@ -35,6 +35,10 @@ type Config struct {
 	// 0 означает автоматический выбор по числу логических ядер CPU.
 	Workers int `yaml:"workers"`
 
+	// LLMWorkers — максимальное число одновременных запросов к LLM.
+	// 0 = 4 (разумный дефолт с учётом rate-limit большинства провайдеров).
+	LLMWorkers int `yaml:"llm_workers"`
+
 	// MaxMutants ограничивает число мутантов (0 = без ограничений).
 	MaxMutants int `yaml:"max_mutants"`
 
