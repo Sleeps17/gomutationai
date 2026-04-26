@@ -1,3 +1,4 @@
 gomutationai
 *.json
 .gomutationai.yaml
+testdata
