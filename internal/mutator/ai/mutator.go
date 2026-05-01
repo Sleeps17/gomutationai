@@ -215,6 +215,7 @@ func (m *Mutator) generateForFunction(
 		OperatorName:     resp.OperatorName,
 		Description:      resp.Description,
 		BehavioralImpact: resp.BehavioralImpact,
+		TargetTest:       fn.TestName,
 		Original:         resp.OriginalSnippet,
 		Mutated:          resp.MutatedSnippet,
 		MutatedSrc:       mutatedSrc,

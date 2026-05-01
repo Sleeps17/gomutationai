@@ -34,6 +34,8 @@ type Mutant struct {
 	// BehavioralImpact — конкретный пример входных данных, на которых мутант меняет поведение.
 	// Генерируется LLM как proof-of-non-equivalence.
 	BehavioralImpact string
+	// TargetTest — имя единственной тестовой функции, которую нужно запускать для этого мутанта.
+	TargetTest string
 	// Исходный фрагмент кода до мутации.
 	Original string
 	// Изменённый фрагмент кода после мутации.

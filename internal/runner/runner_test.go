@@ -193,6 +193,24 @@ func TestTruncate_Empty(t *testing.T) {
 	}
 }
 
+func TestGoTestArgs_TargetSingleTest(t *testing.T) {
+	args := goTestArgs(30*time.Second, "./pkg/example", "TestAdd")
+	got := strings.Join(args, " ")
+	want := "test -count=1 -timeout 30s -run ^TestAdd$ ./pkg/example"
+	if got != want {
+		t.Fatalf("goTestArgs = %q, want %q", got, want)
+	}
+}
+
+func TestGoTestArgs_WithoutTargetTest(t *testing.T) {
+	args := goTestArgs(5*time.Second, "./pkg/example", "")
+	got := strings.Join(args, " ")
+	want := "test -count=1 -timeout 5s ./pkg/example"
+	if got != want {
+		t.Fatalf("goTestArgs = %q, want %q", got, want)
+	}
+}
+
 // ── copyFile ─────────────────────────────────────────────────────────────────
 
 func TestCopyFile(t *testing.T) {
@@ -366,7 +384,7 @@ func TestExecTest_PassingTests(t *testing.T) {
 
 	// Запускаем тесты в оригинальном (немутированном) пакете — они должны пройти
 	relPkg, _ := filepath.Rel(modRoot, dir)
-	output, killed, timedOut := r.execTest(context.Background(), modRoot, "./"+relPkg)
+	output, killed, timedOut := r.execTest(context.Background(), modRoot, "./"+relPkg, "")
 	_ = output
 	if timedOut {
 		t.Error("тесты не должны завершаться по таймауту")
@@ -388,7 +406,7 @@ func TestExecTest_BuildFailed(t *testing.T) {
 	os.WriteFile(filepath.Join(tmp, "broken.go"), []byte("package main\nfunc f( {"), 0644)
 
 	r := &Runner{Timeout: 10 * time.Second}
-	output, killed, timedOut := r.execTest(context.Background(), tmp, ".")
+	output, killed, timedOut := r.execTest(context.Background(), tmp, ".", "")
 	if timedOut {
 		t.Error("не должно быть таймаута")
 	}

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -216,7 +217,7 @@ func (r *Runner) runOne(ctx context.Context, m *mutator.Mutant, pool chan string
 		return Result{}, fmt.Errorf("относительный путь пакета: %w", err)
 	}
 
-	output, killed, timedOut := r.execTest(ctx, workerDir, "./"+relPkg)
+	output, killed, timedOut := r.execTest(ctx, workerDir, "./"+relPkg, m.TargetTest)
 
 	switch {
 	case timedOut:
@@ -248,12 +249,11 @@ func verifySyntax(m *mutator.Mutant) (mutator.Status, string) {
 
 // execTest запускает `go test` в указанной директории с таймаутом.
 // Возвращает (вывод, killed, timedOut).
-func (r *Runner) execTest(ctx context.Context, dir, pkg string) (string, bool, bool) {
+func (r *Runner) execTest(ctx context.Context, dir, pkg, testName string) (string, bool, bool) {
 	tCtx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(tCtx, "go", "test", "-count=1", "-timeout",
-		fmt.Sprintf("%.0fs", r.Timeout.Seconds()), pkg)
+	cmd := exec.CommandContext(tCtx, "go", goTestArgs(r.Timeout, pkg, testName)...)
 	cmd.Dir = dir
 
 	var out bytes.Buffer
@@ -281,6 +281,20 @@ func (r *Runner) execTest(ctx context.Context, dir, pkg string) (string, bool, b
 
 	// Тесты прошли — мутант выжил
 	return out.String(), false, false
+}
+
+func goTestArgs(timeout time.Duration, pkg, testName string) []string {
+	args := []string{
+		"test",
+		"-count=1",
+		"-timeout",
+		fmt.Sprintf("%.0fs", timeout.Seconds()),
+	}
+	if testName != "" {
+		args = append(args, "-run", "^"+regexp.QuoteMeta(testName)+"$")
+	}
+	args = append(args, pkg)
+	return args
 }
 
 // findModuleRoot находит директорию, содержащую go.mod, через `go env GOMOD`.

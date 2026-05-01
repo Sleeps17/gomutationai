@@ -25,6 +25,8 @@ type FunctionContext struct {
 	Comment   string
 	StartLine int
 	EndLine   int
+	// TestName — имя тестовой функции, на которую нацелен мутант.
+	TestName string
 	// TestBody — исходный код теста, который покрывает функцию (если найден).
 	// Передаётся в LLM для более точной генерации мутаций.
 	TestBody string
@@ -146,4 +148,3 @@ func funcName(fd *ast.FuncDecl) string {
 	format.Node(&buf, token.NewFileSet(), recv)
 	return buf.String() + "." + fd.Name.Name
 }
-

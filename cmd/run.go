@@ -83,22 +83,22 @@ func runMutation(cmd *cobra.Command, args []string) error {
 	}
 
 	callGraph := analyzer.BuildCallGraph(analyses)
-	coveredSet := analyzer.ExpandWithCallees(tested, callGraph, calleeDepth)
+	coveredContext := analyzer.ExpandWithCalleesContext(tested, callGraph, calleeDepth)
 
 	fmt.Printf("  Покрытых тестами функций: %d (с callees глубиной %d: %d)\n",
-		len(tested), calleeDepth, len(coveredSet))
+		len(tested), calleeDepth, len(coveredContext))
 
 	// Проставляем TestBody и фильтруем функции по покрытию
 	totalFuncs := 0
 	for _, fa := range analyses {
 		filtered := fa.Functions[:0]
 		for _, fn := range fa.Functions {
-			if !coveredSet[fn.Name] {
+			tf, ok := coveredContext[fn.Name]
+			if !ok {
 				continue
 			}
-			if tf, ok := tested[fn.Name]; ok {
-				fn.TestBody = tf.TestBody
-			}
+			fn.TestName = tf.TestName
+			fn.TestBody = tf.TestBody
 			filtered = append(filtered, fn)
 			totalFuncs++
 		}

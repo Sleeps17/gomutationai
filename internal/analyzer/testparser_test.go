@@ -258,6 +258,31 @@ func TestExpandWithCallees_Depth2(t *testing.T) {
 	}
 }
 
+func TestExpandWithCalleesContext_PropagatesSourceTest(t *testing.T) {
+	tested := map[string]TestedFunction{
+		"A": {Name: "A", TestName: "TestA", TestBody: "body-a"},
+	}
+	graph := map[string][]string{
+		"A": {"B"},
+		"B": {"C"},
+	}
+
+	result := ExpandWithCalleesContext(tested, graph, 2)
+
+	if result["A"].TestName != "TestA" {
+		t.Fatalf("A должна сохранить исходный тест, got %q", result["A"].TestName)
+	}
+	if result["B"].TestName != "TestA" {
+		t.Fatalf("B должна унаследовать TestA, got %q", result["B"].TestName)
+	}
+	if result["C"].TestName != "TestA" {
+		t.Fatalf("C должна унаследовать TestA, got %q", result["C"].TestName)
+	}
+	if result["C"].TestBody != "body-a" {
+		t.Fatalf("C должна унаследовать TestBody исходного теста, got %q", result["C"].TestBody)
+	}
+}
+
 func TestExpandWithCallees_MutualRecursion(t *testing.T) {
 	tested := map[string]TestedFunction{
 		"A": {Name: "A"},

@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -188,6 +189,69 @@ func ExpandWithCallees(
 				result[callee] = true
 				queue = append(queue, entry{callee, curr.depth + 1})
 			}
+		}
+	}
+
+	return result
+}
+
+// ExpandWithCalleesContext возвращает карту функций для мутации вместе
+// с тестом-источником, который следует запускать против мутанта.
+// Для напрямую покрытых функций берётся их собственный тест, для callees —
+// тест ближайшей родительской функции, от которой они были достигнуты в BFS.
+func ExpandWithCalleesContext(
+	tested map[string]TestedFunction,
+	graph map[string][]string,
+	depth int,
+) map[string]TestedFunction {
+	result := make(map[string]TestedFunction, len(tested))
+	for name, tf := range tested {
+		result[name] = tf
+	}
+
+	if depth <= 0 {
+		return result
+	}
+
+	type entry struct {
+		name   string
+		depth  int
+		source TestedFunction
+	}
+
+	names := make([]string, 0, len(tested))
+	for name := range tested {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	queue := make([]entry, 0, len(names))
+	visitedAt := make(map[string]int, len(tested))
+	for _, name := range names {
+		tf := tested[name]
+		queue = append(queue, entry{name: name, depth: 0, source: tf})
+		visitedAt[name] = 0
+	}
+
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+
+		if curr.depth >= depth {
+			continue
+		}
+
+		for _, callee := range graph[curr.name] {
+			if _, seen := visitedAt[callee]; seen {
+				continue
+			}
+			visitedAt[callee] = curr.depth + 1
+			result[callee] = curr.source
+			queue = append(queue, entry{
+				name:   callee,
+				depth:  curr.depth + 1,
+				source: curr.source,
+			})
 		}
 	}
 
