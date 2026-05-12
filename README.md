@@ -1,5 +1,13 @@
 # gomutationai
 
+[![CI](https://github.com/Sleeps17/GoMutationAI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sleeps17/GoMutationAI/actions/workflows/ci.yml)
+[![Release](https://github.com/Sleeps17/GoMutationAI/actions/workflows/release.yml/badge.svg)](https://github.com/Sleeps17/GoMutationAI/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/Sleeps17/GoMutationAI/branch/main/graph/badge.svg)](https://codecov.io/gh/Sleeps17/GoMutationAI)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Sleeps17/gomutationai)](https://goreportcard.com/report/github.com/Sleeps17/gomutationai)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Sleeps17/gomutationai.svg)](https://pkg.go.dev/github.com/Sleeps17/gomutationai)
+[![Go version](https://img.shields.io/github/go-mod/go-version/Sleeps17/GoMutationAI)](https://go.dev/dl/)
+[![Release version](https://img.shields.io/github/v/release/Sleeps17/GoMutationAI?display_name=tag&sort=semver)](https://github.com/Sleeps17/GoMutationAI/releases)
+
 Инструмент мутационного тестирования для языка Go на основе больших языковых моделей (LLM).
 
 В отличие от классических мутаторов (go-mutesting, Gremlins), которые заменяют токены по заранее
