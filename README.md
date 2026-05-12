@@ -7,7 +7,6 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/Sleeps17/gomutationai.svg)](https://pkg.go.dev/github.com/Sleeps17/gomutationai)
 [![Go version](https://img.shields.io/github/go-mod/go-version/Sleeps17/GoMutationAI)](https://go.dev/dl/)
 [![Release version](https://img.shields.io/github/v/release/Sleeps17/GoMutationAI?display_name=tag&sort=semver)](https://github.com/Sleeps17/GoMutationAI/releases)
-[![License](https://img.shields.io/github/license/Sleeps17/GoMutationAI)](LICENSE)
 
 Инструмент мутационного тестирования для языка Go на основе больших языковых моделей (LLM).
 
