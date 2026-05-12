@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Sleeps17/gomutationai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sleeps17/gomutationai/actions/workflows/ci.yml)
 [![Release](https://github.com/Sleeps17/gomutationai/actions/workflows/release.yml/badge.svg)](https://github.com/Sleeps17/gomutationai/actions/workflows/release.yml)
-[![codecov](https://codecov.io/gh/Sleeps17/gomutationai/branch/main/graph/badge.svg)](https://codecov.io/gh/Sleeps17/gomutationai)
+[![codecov](https://codecov.io/gh/Sleeps17/gomutationai/graph/badge.svg?token=RZ81R280CI)](https://codecov.io/gh/Sleeps17/gomutationai)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Sleeps17/gomutationai)](https://goreportcard.com/report/github.com/Sleeps17/gomutationai)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Sleeps17/gomutationai.svg)](https://pkg.go.dev/github.com/Sleeps17/gomutationai)
 [![Go version](https://img.shields.io/github/go-mod/go-version/Sleeps17/gomutationai)](https://go.dev/dl/)
