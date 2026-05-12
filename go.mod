@@ -1,4 +1,4 @@
-module gitlab.mai.ru/gomutationai
+module github.com/Sleeps17/GoMutationAI
 
 go 1.26.1
 

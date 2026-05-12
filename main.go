@@ -1,6 +1,6 @@
 package main
 
-import "gitlab.mai.ru/gomutationai/cmd"
+import "github.com/Sleeps17/GoMutationAI/cmd"
 
 func main() {
 	cmd.Execute()

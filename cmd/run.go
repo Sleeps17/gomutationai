@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sleeps17/GoMutationAI/internal/analyzer"
+	"github.com/Sleeps17/GoMutationAI/internal/mutator"
+	aimutator "github.com/Sleeps17/GoMutationAI/internal/mutator/ai"
+	"github.com/Sleeps17/GoMutationAI/internal/reporter"
+	"github.com/Sleeps17/GoMutationAI/internal/runner"
 	"github.com/spf13/cobra"
-	"gitlab.mai.ru/gomutationai/internal/analyzer"
-	"gitlab.mai.ru/gomutationai/internal/mutator"
-	aimutator "gitlab.mai.ru/gomutationai/internal/mutator/ai"
-	"gitlab.mai.ru/gomutationai/internal/reporter"
-	"gitlab.mai.ru/gomutationai/internal/runner"
 )
 
 var runCmd = &cobra.Command{

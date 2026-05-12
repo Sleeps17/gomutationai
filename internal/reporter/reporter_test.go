@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"gitlab.mai.ru/gomutationai/internal/mutator"
-	"gitlab.mai.ru/gomutationai/internal/runner"
+	"github.com/Sleeps17/GoMutationAI/internal/mutator"
+	"github.com/Sleeps17/GoMutationAI/internal/runner"
 )
 
 // makeResult создаёт тестовый runner.Result с заданным статусом.
@@ -278,8 +278,8 @@ func TestTruncate(t *testing.T) {
 		{"", 5, ""},
 		{"abc", 3, "abc"},
 		{"abcd", 3, "abc…"},
-		{"  a + b  ", 20, "a + b"},        // trimspace
-		{"a\n+\nb", 20, "a + b"},          // newlines replaced
+		{"  a + b  ", 20, "a + b"}, // trimspace
+		{"a\n+\nb", 20, "a + b"},   // newlines replaced
 	}
 	for _, c := range cases {
 		got := truncate(c.input, c.n)

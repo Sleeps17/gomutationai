@@ -9,17 +9,17 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"gitlab.mai.ru/gomutationai/internal/mutator"
-	"gitlab.mai.ru/gomutationai/internal/runner"
+	"github.com/Sleeps17/GoMutationAI/internal/mutator"
+	"github.com/Sleeps17/GoMutationAI/internal/runner"
 )
 
 // Report содержит все метрики и результаты по каждому мутанту.
 type Report struct {
-	TotalMutants      int     `json:"total_mutants"`
-	Killed            int     `json:"killed"`
-	Survived          int     `json:"survived"`
-	CompileErrors     int     `json:"compile_errors"`
-	Timeouts          int     `json:"timeouts"`
+	TotalMutants  int `json:"total_mutants"`
+	Killed        int `json:"killed"`
+	Survived      int `json:"survived"`
+	CompileErrors int `json:"compile_errors"`
+	Timeouts      int `json:"timeouts"`
 	// MutationScore — доля убитых мутантов среди скомпилировавшихся:
 	// killed / (total - compile_errors)
 	MutationScore float64 `json:"mutation_score"`
@@ -174,7 +174,6 @@ func filterByStatus(results []runner.Result, status mutator.Status) []runner.Res
 	}
 	return out
 }
-
 
 func shortPath(p string) string {
 	parts := strings.Split(p, "/")

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Sleeps17/GoMutationAI/internal/config"
 	"github.com/spf13/cobra"
-	"gitlab.mai.ru/gomutationai/internal/config"
 )
 
 var (
@@ -49,4 +49,3 @@ func initConfig() {
 		os.Exit(1)
 	}
 }
-
