@@ -72,7 +72,7 @@ func runMutation(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("анализ провалился: %w", err)
 	}
 	if len(analyses) == 0 {
-		return fmt.Errorf("Go-файлы не найдены в %s", strings.Join(dirs, ", "))
+		return fmt.Errorf("go-файлы не найдены в %s", strings.Join(dirs, ", "))
 	}
 
 	// ── 2. Определение покрытых тестами функций ────────────────────────────
