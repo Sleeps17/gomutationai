@@ -130,9 +130,7 @@ func runMutation(cmd *cobra.Command, args []string) error {
 			fileResults[idx] = fileResult{path: fa.FilePath, mutants: ms, err: err}
 
 			printMu.Lock()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "  [ai] %s: %v\n", fa.FilePath, err)
-			} else {
+			if err == nil && len(ms) != 0 {
 				fmt.Printf("  %s → %d мутантов\n", fa.FilePath, len(ms))
 			}
 			printMu.Unlock()

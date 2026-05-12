@@ -29,7 +29,6 @@ func TestBuildPrompt_ContainsLineHint(t *testing.T) {
 
 func TestBuildPrompt_StructuredOutputTrue_NoFormatInstructions(t *testing.T) {
 	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
-	// При structured output инструкции по формату не нужны в промпте
 	if strings.Contains(prompt, "Верни ТОЛЬКО валидный JSON") {
 		t.Error("при structured_output=true не должно быть JSON-инструкций в промпте")
 	}
@@ -40,11 +39,10 @@ func TestBuildPrompt_StructuredOutputFalse_HasFormatInstructions(t *testing.T) {
 	if !strings.Contains(prompt, "Верни ТОЛЬКО валидный JSON") {
 		t.Error("при structured_output=false должны быть JSON-инструкции в промпте")
 	}
-	if !strings.Contains(prompt, "operator_name") {
-		t.Error("промпт должен содержать поля JSON схемы")
-	}
-	if !strings.Contains(prompt, "behavioral_impact") {
-		t.Error("промпт должен содержать поле behavioral_impact")
+	for _, field := range []string{"operator_name", "behavioral_impact", "mutation_kind"} {
+		if !strings.Contains(prompt, field) {
+			t.Errorf("промпт должен содержать поле JSON-схемы %q", field)
+		}
 	}
 }
 
@@ -96,8 +94,8 @@ func TestBuildPrompt_ContainsRealisticLogicalMutationGuidance(t *testing.T) {
 	if !strings.Contains(prompt, "реальную логическую ошибку") {
 		t.Error("промпт должен ориентировать модель на логические ошибки")
 	}
-	if !strings.Contains(prompt, "неверное граничное условие") {
-		t.Error("промпт должен перечислять правдоподобные типы логических ошибок")
+	if !strings.Contains(prompt, "доменно осмысленные") {
+		t.Error("промпт должен требовать доменно осмысленные ошибки")
 	}
 	if !strings.Contains(prompt, "делает код хуже") {
 		t.Error("промпт должен запрещать мутации-исправления")
@@ -108,11 +106,23 @@ func TestBuildPrompt_ContainsRealisticLogicalMutationGuidance(t *testing.T) {
 	if !strings.Contains(prompt, "Для входа/вызова X оригинал делает Y, мутант делает Z") {
 		t.Error("промпт должен требовать конкретный behavioral_impact")
 	}
+	if !strings.Contains(prompt, "Не выбирай классический оператор мутации как самоцель") {
+		t.Error("промпт должен запрещать тривиальные замены одного токена")
+	}
+	if !strings.Contains(prompt, `одиночный токен`) {
+		t.Error("промпт должен требовать не одиночный token/literal в original_snippet")
+	}
+	if !strings.Contains(prompt, "не оставляй неиспользуемые импорты") {
+		t.Error("промпт должен требовать build/vet-корректность")
+	}
+	if !strings.Contains(prompt, "Избегай crash-only мутантов") {
+		t.Error("промпт должен ограничивать crash-only мутации")
+	}
 }
 
 func TestBuildPrompt_ContainsOperatorCategories(t *testing.T) {
 	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
-	for _, name := range []string{"BoundaryCondition", "BooleanLogic", "WrongVariable", "ResourceLifecycle"} {
+	for _, name := range []string{"ContextPropagation", "StateConsistency", "IdentifierConfusion", "ResourceLifecycle"} {
 		if !strings.Contains(prompt, name) {
 			t.Errorf("промпт должен содержать категорию оператора %q", name)
 		}
@@ -123,6 +133,54 @@ func TestBuildPrompt_NonEmpty(t *testing.T) {
 	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
 	if strings.TrimSpace(prompt) == "" {
 		t.Error("BuildPrompt не должен возвращать пустую строку")
+	}
+}
+
+// ── Новая иерархия приоритетов ──────────────────────────────────────────────
+
+func TestBuildPrompt_ContainsChainOfThoughtSteps(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	for _, step := range []string{
+		"Шаг 1. Анализ кода",
+		"Шаг 2. Анализ теста",
+		"Шаг 3. Выбор мутации по приоритету",
+	} {
+		if !strings.Contains(prompt, step) {
+			t.Errorf("промпт должен содержать шаг chain-of-thought %q", step)
+		}
+	}
+}
+
+func TestBuildPrompt_ContainsAllFourPriorities(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	for _, p := range []string{
+		`Приоритет 1 — "test-gap"`,
+		`Приоритет 2 — "logical-violation"`,
+		`Приоритет 3 — "developer-mistake"`,
+		`Приоритет 4 — "primitive"`,
+	} {
+		if !strings.Contains(prompt, p) {
+			t.Errorf("промпт должен содержать %q", p)
+		}
+	}
+}
+
+func TestBuildPrompt_ContainsMutationKindEnumeration(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	for _, k := range MutationKindNames {
+		if !strings.Contains(prompt, k) {
+			t.Errorf("промпт должен содержать значение mutation_kind %q", k)
+		}
+	}
+}
+
+func TestBuildPrompt_PrimitiveIsLastResort(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	// Primitive должен идти после остальных приоритетов в тексте.
+	idxTestGap := strings.Index(prompt, `Приоритет 1 — "test-gap"`)
+	idxPrimitive := strings.Index(prompt, `Приоритет 4 — "primitive"`)
+	if idxTestGap == -1 || idxPrimitive == -1 || idxPrimitive < idxTestGap {
+		t.Errorf("primitive должен описываться последним: idxTestGap=%d, idxPrimitive=%d", idxTestGap, idxPrimitive)
 	}
 }
 
@@ -169,7 +227,7 @@ func TestMutationJSONSchema_RequiredFields(t *testing.T) {
 	if !ok {
 		t.Fatal("поле required должно быть []string")
 	}
-	for _, field := range []string{"operator_name", "description", "behavioral_impact", "original_snippet", "mutated_snippet"} {
+	for _, field := range []string{"mutation_kind", "operator_name", "description", "behavioral_impact", "original_snippet", "mutated_snippet"} {
 		found := false
 		for _, r := range required {
 			if r == field {
@@ -215,6 +273,36 @@ func TestMutationJSONSchema_OperatorNameEnum(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("operator_name enum должен содержать %q", want)
+		}
+	}
+}
+
+func TestMutationJSONSchema_MutationKindEnum(t *testing.T) {
+	props, ok := MutationJSONSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("properties должен быть map[string]any")
+	}
+	kind, ok := props["mutation_kind"].(map[string]any)
+	if !ok {
+		t.Fatal("mutation_kind должен быть map[string]any")
+	}
+	enum, ok := kind["enum"].([]string)
+	if !ok {
+		t.Fatal("mutation_kind должен содержать enum []string")
+	}
+	if len(enum) != 4 {
+		t.Fatalf("mutation_kind enum length = %d, want 4", len(enum))
+	}
+	for _, want := range []string{"test-gap", "logical-violation", "developer-mistake", "primitive"} {
+		found := false
+		for _, got := range enum {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("mutation_kind enum должен содержать %q", want)
 		}
 	}
 }

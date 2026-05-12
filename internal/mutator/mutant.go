@@ -17,6 +17,25 @@ const (
 	StatusTimeout Status = "timeout"
 )
 
+// Kind описывает приоритетный уровень мутации в иерархии генерации.
+// От самого ценного (test-gap) к самому простому (primitive).
+type Kind string
+
+const (
+	// KindTestGap — мутация подсвечивает критический пробел в тестовом покрытии:
+	// сценарий, который функция реально выполняет, но тест не проверяет.
+	KindTestGap Kind = "test-gap"
+	// KindLogicalViolation — нарушение доменного инварианта, контракта или жизненного цикла:
+	// неверный ключ/поле, потерянное состояние, неверный fallback, нарушенный resource lifecycle.
+	KindLogicalViolation Kind = "logical-violation"
+	// KindDeveloperMistake — классическая ошибка разработчика:
+	// off-by-one, перепутанные имена переменных/полей, неверная константа из набора похожих.
+	KindDeveloperMistake Kind = "developer-mistake"
+	// KindPrimitive — тривиальная замена оператора/литерала. Допустима только если
+	// в behavioral_impact явно объяснён ломаемый доменный инвариант.
+	KindPrimitive Kind = "primitive"
+)
+
 // Mutant описывает одно изменение в исходном коде, сгенерированное LLM.
 type Mutant struct {
 	// Уникальный идентификатор мутанта в рамках одного прогона.
@@ -29,6 +48,8 @@ type Mutant struct {
 	Col int
 	// Название оператора мутации, предложенного LLM (например "OffByOneError").
 	OperatorName string
+	// Kind — приоритетный уровень мутации (см. Kind).
+	Kind Kind
 	// Человекочитаемое описание внесённого дефекта.
 	Description string
 	// BehavioralImpact — конкретный пример входных данных, на которых мутант меняет поведение.

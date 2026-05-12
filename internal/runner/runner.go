@@ -217,16 +217,12 @@ func (r *Runner) runOne(ctx context.Context, m *mutator.Mutant, pool chan string
 		return Result{}, fmt.Errorf("относительный путь пакета: %w", err)
 	}
 
-	output, killed, timedOut := r.execTest(ctx, workerDir, "./"+relPkg, m.TargetTest)
+	output, status := r.execTest(ctx, workerDir, "./"+relPkg, m.TargetTest)
 
-	switch {
-	case timedOut:
-		m.Status = mutator.StatusTimeout
-	case killed:
-		m.Status = mutator.StatusKilled
+	m.Status = status
+	switch status {
+	case mutator.StatusKilled:
 		m.KilledBy = extractFailedTest(output)
-	default:
-		m.Status = mutator.StatusSurvived
 	}
 
 	return Result{
@@ -248,8 +244,8 @@ func verifySyntax(m *mutator.Mutant) (mutator.Status, string) {
 }
 
 // execTest запускает `go test` в указанной директории с таймаутом.
-// Возвращает (вывод, killed, timedOut).
-func (r *Runner) execTest(ctx context.Context, dir, pkg, testName string) (string, bool, bool) {
+// Возвращает вывод и статус результата.
+func (r *Runner) execTest(ctx context.Context, dir, pkg, testName string) (string, mutator.Status) {
 	tCtx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 
@@ -263,24 +259,43 @@ func (r *Runner) execTest(ctx context.Context, dir, pkg, testName string) (strin
 	err := cmd.Run()
 
 	if tCtx.Err() == context.DeadlineExceeded {
-		return out.String(), false, true
+		return out.String(), mutator.StatusTimeout
 	}
 
 	if err != nil {
 		output := out.String()
 		// Ошибка сборки отличается от провала тестов
-		if strings.Contains(output, "build failed") ||
-			strings.Contains(output, "[build failed]") ||
-			strings.Contains(output, "syntax error") ||
-			strings.Contains(output, "cannot ") {
-			return output, false, false
+		if isBuildFailureOutput(output) {
+			return output, mutator.StatusCompileError
 		}
 		// Тесты упали — мутант обнаружен
-		return output, true, false
+		return output, mutator.StatusKilled
 	}
 
 	// Тесты прошли — мутант выжил
-	return out.String(), false, false
+	return out.String(), mutator.StatusSurvived
+}
+
+func isBuildFailureOutput(output string) bool {
+	patterns := []string{
+		"build failed",
+		"[build failed]",
+		"syntax error",
+		"declared and not used",
+		"imported and not used",
+		"undefined:",
+		"cannot use",
+		"too many arguments",
+		"not enough arguments",
+		"suspect and:",
+		"suspect or:",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(output, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func goTestArgs(timeout time.Duration, pkg, testName string) []string {

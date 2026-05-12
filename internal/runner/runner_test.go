@@ -384,13 +384,10 @@ func TestExecTest_PassingTests(t *testing.T) {
 
 	// Запускаем тесты в оригинальном (немутированном) пакете — они должны пройти
 	relPkg, _ := filepath.Rel(modRoot, dir)
-	output, killed, timedOut := r.execTest(context.Background(), modRoot, "./"+relPkg, "")
+	output, status := r.execTest(context.Background(), modRoot, "./"+relPkg, "")
 	_ = output
-	if timedOut {
-		t.Error("тесты не должны завершаться по таймауту")
-	}
-	if killed {
-		t.Errorf("оригинальные тесты не должны падать, output: %s", output)
+	if status != mutator.StatusSurvived {
+		t.Errorf("оригинальные тесты status = %s, want survived, output: %s", status, output)
 	}
 }
 
@@ -406,14 +403,34 @@ func TestExecTest_BuildFailed(t *testing.T) {
 	os.WriteFile(filepath.Join(tmp, "broken.go"), []byte("package main\nfunc f( {"), 0644)
 
 	r := &Runner{Timeout: 10 * time.Second}
-	output, killed, timedOut := r.execTest(context.Background(), tmp, ".", "")
-	if timedOut {
-		t.Error("не должно быть таймаута")
+	output, status := r.execTest(context.Background(), tmp, ".", "")
+	if status != mutator.StatusCompileError {
+		t.Errorf("status = %s, want compile_error, output: %s", status, output)
 	}
-	if killed {
-		t.Error("killed должен быть false при ошибке компиляции")
+}
+
+func TestExecTest_UnusedImportBuildFailed(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "buildtest-*")
+	if err != nil {
+		t.Fatal(err)
 	}
-	_ = output
+	defer os.RemoveAll(tmp)
+
+	os.WriteFile(filepath.Join(tmp, "go.mod"), []byte("module test\ngo 1.21\n"), 0644)
+	os.WriteFile(filepath.Join(tmp, "unused.go"), []byte(`package buildtest
+
+import "fmt"
+
+func F() int {
+	return 1
+}
+`), 0644)
+
+	r := &Runner{Timeout: 10 * time.Second}
+	output, status := r.execTest(context.Background(), tmp, ".", "")
+	if status != mutator.StatusCompileError {
+		t.Errorf("status = %s, want compile_error, output: %s", status, output)
+	}
 }
 
 // ── setupWorkerPool ───────────────────────────────────────────────────────────

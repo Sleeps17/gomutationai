@@ -25,11 +25,20 @@ import (
 
 // MutationResponse — структура ответа, которую LLM возвращает в формате JSON.
 type MutationResponse struct {
+	MutationKind     string `json:"mutation_kind"`
 	OperatorName     string `json:"operator_name"`
 	Description      string `json:"description"`
 	BehavioralImpact string `json:"behavioral_impact"`
 	OriginalSnippet  string `json:"original_snippet"`
 	MutatedSnippet   string `json:"mutated_snippet"`
+}
+
+// validMutationKinds — допустимые значения поля mutation_kind в ответе LLM.
+var validMutationKinds = map[string]mut.Kind{
+	string(mut.KindTestGap):          mut.KindTestGap,
+	string(mut.KindLogicalViolation): mut.KindLogicalViolation,
+	string(mut.KindDeveloperMistake): mut.KindDeveloperMistake,
+	string(mut.KindPrimitive):        mut.KindPrimitive,
 }
 
 // Mutator генерирует мутанты с помощью OpenAI-совместимого LLM API.
@@ -116,9 +125,8 @@ func (m *Mutator) Generate(ctx context.Context, fa *analyzer.FileAnalysis) ([]mu
 	wg.Wait()
 
 	var all []mut.Mutant
-	for i, e := range entries {
+	for _, e := range entries {
 		if e.err != nil {
-			fmt.Printf("[ai] предупреждение: функция %s: %v\n", fa.Functions[i].Name, e.err)
 			continue
 		}
 		if e.mutant != nil {
@@ -192,6 +200,11 @@ func (m *Mutator) generateForFunction(
 		return nil, fmt.Errorf("LLM не указала behavioral_impact — мутация предположительно эквивалентна")
 	}
 
+	kind, ok := validMutationKinds[strings.ToLower(strings.TrimSpace(resp.MutationKind))]
+	if !ok {
+		return nil, fmt.Errorf("LLM вернул неизвестное mutation_kind: %q", resp.MutationKind)
+	}
+
 	// Проверяем, что original_snippet действительно присутствует в исходном файле
 	if !strings.Contains(string(fileSrc), resp.OriginalSnippet) {
 		return nil, fmt.Errorf("original_snippet не найден в файле: %q", resp.OriginalSnippet)
@@ -213,6 +226,7 @@ func (m *Mutator) generateForFunction(
 		File:             fn.File,
 		Line:             lineNum,
 		OperatorName:     resp.OperatorName,
+		Kind:             kind,
 		Description:      resp.Description,
 		BehavioralImpact: resp.BehavioralImpact,
 		TargetTest:       fn.TestName,
