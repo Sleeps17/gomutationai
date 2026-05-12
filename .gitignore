@@ -1,4 +1,17 @@
-gomutationai
-*.json
+# Локальный бинарник, собранный из main.go
+/gomutationai
+
+# Локальный конфиг пользователя
 .gomutationai.yaml
-testdata
+
+# Артефакты прогона
+report.json
+*.out
+coverage.txt
+
+# GoReleaser
+dist/
+
+# IDE
+.idea/
+.vscode/
