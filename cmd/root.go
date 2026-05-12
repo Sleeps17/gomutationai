@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Sleeps17/GoMutationAI/internal/config"
+	"github.com/Sleeps17/gomutationai/internal/config"
 	"github.com/spf13/cobra"
 )
 

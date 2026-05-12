@@ -51,7 +51,7 @@
 ## Установка
 
 ```bash
-go install github.com/Sleeps17/GoMutationAI
+go install github.com/Sleeps17/gomutationai@latest
 ```
 
 Или запуск напрямую без сборки:

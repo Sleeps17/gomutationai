@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Sleeps17/GoMutationAI/internal/mutator"
-	"github.com/Sleeps17/GoMutationAI/internal/runner"
+	"github.com/Sleeps17/gomutationai/internal/mutator"
+	"github.com/Sleeps17/gomutationai/internal/runner"
 )
 
 // makeResult создаёт тестовый runner.Result с заданным статусом.

@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sleeps17/GoMutationAI/internal/mutator"
+	"github.com/Sleeps17/gomutationai/internal/mutator"
 )
 
 // Result хранит итог выполнения тестов против одного мутанта.

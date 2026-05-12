@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Sleeps17/GoMutationAI/internal/analyzer"
-	mut "github.com/Sleeps17/GoMutationAI/internal/mutator"
+	"github.com/Sleeps17/gomutationai/internal/analyzer"
+	mut "github.com/Sleeps17/gomutationai/internal/mutator"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"

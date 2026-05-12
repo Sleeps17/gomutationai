@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sleeps17/GoMutationAI/internal/analyzer"
-	"github.com/Sleeps17/GoMutationAI/internal/mutator"
-	aimutator "github.com/Sleeps17/GoMutationAI/internal/mutator/ai"
-	"github.com/Sleeps17/GoMutationAI/internal/reporter"
-	"github.com/Sleeps17/GoMutationAI/internal/runner"
+	"github.com/Sleeps17/gomutationai/internal/analyzer"
+	"github.com/Sleeps17/gomutationai/internal/mutator"
+	aimutator "github.com/Sleeps17/gomutationai/internal/mutator/ai"
+	"github.com/Sleeps17/gomutationai/internal/reporter"
+	"github.com/Sleeps17/gomutationai/internal/runner"
 	"github.com/spf13/cobra"
 )
 

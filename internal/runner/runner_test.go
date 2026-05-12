@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sleeps17/GoMutationAI/internal/mutator"
+	"github.com/Sleeps17/gomutationai/internal/mutator"
 )
 
 // moduleRoot возвращает корень Go-модуля (директория с go.mod).
