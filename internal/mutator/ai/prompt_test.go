@@ -72,6 +72,9 @@ func TestBuildPrompt_WithTestBody_DoesNotEncourageTestFitting(t *testing.T) {
 	if !strings.Contains(prompt, "пробел проверки") {
 		t.Error("промпт должен требовать указать пробел проверки, если он виден из теста")
 	}
+	if !strings.Contains(prompt, "не выдумывай") {
+		t.Error("промпт должен запрещать выдумывать пробелы теста")
+	}
 }
 
 func TestBuildPrompt_WithoutTestBody_NoTestSection(t *testing.T) {
@@ -95,6 +98,24 @@ func TestBuildPrompt_ContainsRealisticLogicalMutationGuidance(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "неверное граничное условие") {
 		t.Error("промпт должен перечислять правдоподобные типы логических ошибок")
+	}
+	if !strings.Contains(prompt, "делает код хуже") {
+		t.Error("промпт должен запрещать мутации-исправления")
+	}
+	if !strings.Contains(prompt, "выглядит как исправление") {
+		t.Error("промпт должен явно запрещать исправляющие мутации")
+	}
+	if !strings.Contains(prompt, "Для входа/вызова X оригинал делает Y, мутант делает Z") {
+		t.Error("промпт должен требовать конкретный behavioral_impact")
+	}
+}
+
+func TestBuildPrompt_ContainsOperatorCategories(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	for _, name := range []string{"BoundaryCondition", "BooleanLogic", "WrongVariable", "ResourceLifecycle"} {
+		if !strings.Contains(prompt, name) {
+			t.Errorf("промпт должен содержать категорию оператора %q", name)
+		}
 	}
 }
 
@@ -165,5 +186,35 @@ func TestMutationJSONSchema_RequiredFields(t *testing.T) {
 func TestMutationJSONSchema_NoAdditionalProperties(t *testing.T) {
 	if v, ok := MutationJSONSchema["additionalProperties"].(bool); !ok || v {
 		t.Error("additionalProperties должен быть false")
+	}
+}
+
+func TestMutationJSONSchema_OperatorNameEnum(t *testing.T) {
+	props, ok := MutationJSONSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("properties должен быть map[string]any")
+	}
+	operator, ok := props["operator_name"].(map[string]any)
+	if !ok {
+		t.Fatal("operator_name должен быть map[string]any")
+	}
+	enum, ok := operator["enum"].([]string)
+	if !ok {
+		t.Fatal("operator_name должен содержать enum []string")
+	}
+	if len(enum) != len(MutationOperatorNames) {
+		t.Fatalf("operator_name enum length = %d, want %d", len(enum), len(MutationOperatorNames))
+	}
+	for _, want := range MutationOperatorNames {
+		found := false
+		for _, got := range enum {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("operator_name enum должен содержать %q", want)
+		}
 	}
 }
