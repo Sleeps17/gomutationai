@@ -63,7 +63,7 @@ type Mutant struct {
 	Mutated string
 	// MutatedSrc — полное содержимое файла с применённой мутацией.
 	// Заполняется runner'ом перед запуском тестов; в отчёт не включается.
-	MutatedSrc []byte
+	MutatedSrc []byte `json:"-"`
 	// Результат прогона тестов.
 	Status Status
 	// KilledBy — имя теста, убившего мутант (заполняется только при Status == Killed).
