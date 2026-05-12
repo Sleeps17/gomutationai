@@ -59,6 +59,21 @@ func TestBuildPrompt_WithTestBody(t *testing.T) {
 	}
 }
 
+func TestBuildPrompt_WithTestBody_DoesNotEncourageTestFitting(t *testing.T) {
+	testBody := "func TestAdd(t *testing.T) { ... }"
+	prompt := BuildPrompt("func Add(){}", "f.go", 1, true, testBody)
+
+	if strings.Contains(prompt, "Выбирай мутацию, которую этот тест НЕ обнаружит") {
+		t.Error("промпт не должен напрямую требовать подгонять мутацию под тест")
+	}
+	if !strings.Contains(prompt, "Не подгоняй мутацию") {
+		t.Error("промпт должен запрещать подгонку мутации под конкретные assert-ы")
+	}
+	if !strings.Contains(prompt, "пробел проверки") {
+		t.Error("промпт должен требовать указать пробел проверки, если он виден из теста")
+	}
+}
+
 func TestBuildPrompt_WithoutTestBody_NoTestSection(t *testing.T) {
 	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
 	if strings.Contains(prompt, "Тест, покрывающий функцию") {
@@ -70,6 +85,16 @@ func TestBuildPrompt_ContainsAntiEquivalenceRule(t *testing.T) {
 	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
 	if !strings.Contains(prompt, "ЗАПРЕЩЕНО") {
 		t.Error("промпт должен содержать запрет на эквивалентные мутации")
+	}
+}
+
+func TestBuildPrompt_ContainsRealisticLogicalMutationGuidance(t *testing.T) {
+	prompt := BuildPrompt("func F(){}", "f.go", 1, true, "")
+	if !strings.Contains(prompt, "реальную логическую ошибку") {
+		t.Error("промпт должен ориентировать модель на логические ошибки")
+	}
+	if !strings.Contains(prompt, "неверное граничное условие") {
+		t.Error("промпт должен перечислять правдоподобные типы логических ошибок")
 	}
 }
 
